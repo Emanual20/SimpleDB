@@ -34,6 +34,15 @@ public class TupleDesc implements Serializable {
         public String toString() {
             return fieldName + "(" + fieldType + ")";
         }
+
+        /*@Override
+        public boolean equals(Object obj) {
+            if(obj==null) return false;
+            if(obj==this) return true;
+            if(this.getClass()!=obj.getClass()) return false;
+            TDItem tdItem=(TDItem) obj;
+            return tdItem.fieldName.equals(this.fieldName)&&tdItem.fieldType.equals(this.fieldType);
+        }*/
     }
 
     /**
