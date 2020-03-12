@@ -67,19 +67,18 @@ public class HeapPage implements Page {
     */
     private int getNumTuples() {        
         // some code goes here
-        return 0;
-
+        return (BufferPool.getPageSize()*8)/(td.getSize()*8+1);
     }
 
     /**
      * Computes the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
-    private int getHeaderSize() {        
-        
+    private int getHeaderSize() {
         // some code goes here
-        return 0;
-                 
+        int ret_HeaderSize=this.numSlots/8;
+        if(this.numSlots%8!=0) ret_HeaderSize+=1;
+        return ret_HeaderSize;
     }
     
     /** Return a view of this page before it was modified
@@ -111,8 +110,8 @@ public class HeapPage implements Page {
      * @return the PageId associated with this page.
      */
     public HeapPageId getId() {
-    // some code goes here
-    throw new UnsupportedOperationException("implement this");
+        // some code goes here
+        return this.pid;
     }
 
     /**
@@ -282,7 +281,11 @@ public class HeapPage implements Page {
      */
     public int getNumEmptySlots() {
         // some code goes here
-        return 0;
+        int ret_NumEmptySlots=0;
+        for(int i=0;i<numSlots;i++) {
+            if(!isSlotUsed(i)) ret_NumEmptySlots++;
+        }
+        return ret_NumEmptySlots;
     }
 
     /**
@@ -290,7 +293,10 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // some code goes here
-        return false;
+        int div_res=i/8,div_rem=i%8;
+        int temp=header[div_res];
+        temp>>=div_rem; temp&=1;
+        return temp==1;
     }
 
     /**
@@ -307,7 +313,13 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return null;
+        ArrayList<Tuple> Tuple_list=new ArrayList<>();
+        for(int i=0;i<numSlots;i++){
+            if(isSlotUsed(i)){
+                Tuple_list.add(tuples[i]);
+            }
+        }
+        return Tuple_list.iterator();
     }
 
 }
