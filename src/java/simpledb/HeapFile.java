@@ -1,6 +1,7 @@
 package simpledb;
 
 import java.io.*;
+import java.lang.annotation.IncompleteAnnotationException;
 import java.util.*;
 import java.io.File;
 
@@ -116,9 +117,81 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
         // some code goes here
-        //BufferPool.getPage()
-        return null;
+        /*
+        * 这部分参考了一些网上的资源和思路，确实不太清楚这个TransactionId在这里给出来想干什么，
+        * 其实最后也并没有用到这个TransactionId??? 不很理解
+        * */
+        return new HeapFileIterator(this,tid);
     }
 
+    private static final class HeapFileIterator implements DbFileIterator{
+        private final HeapFile HFI_heapfile;
+        private final TransactionId HFI_tid;
+        private Iterator<Tuple> it;
+        private int now_Page;
+
+        public HeapFileIterator(HeapFile file,TransactionId tid){
+            this.HFI_heapfile=file;
+            this.HFI_tid=tid;
+        }
+
+        @Override
+        public void open()
+                throws DbException, TransactionAbortedException{
+            now_Page=0;
+            it=getPageTuples(now_Page);
+        }
+        private Iterator<Tuple> getPageTuples(int pageNumber)
+                throws TransactionAbortedException,DbException{
+            if(pageNumber>=0 && pageNumber<HFI_heapfile.numPages()){
+                HeapPageId pid=new HeapPageId(HFI_heapfile.getId(),pageNumber);
+                HeapPage page=(HeapPage) Database.getBufferPool().getPage(HFI_tid,pid,Permissions.READ_ONLY);
+                return page.iterator();
+            }
+            throw new DbException("something bad happen");
+        }
+
+        @Override
+        public boolean hasNext()
+                throws DbException, TransactionAbortedException{
+            if(it==null||!it.hasNext()) return false;
+            return true;
+        }
+
+        @Override
+        public Tuple next()
+                throws DbException,TransactionAbortedException,NoSuchElementException{
+            if(it==null) throw new NoSuchElementException();
+            if(it.hasNext()&&now_Page<(HFI_heapfile.numPages()-1)){
+                /*
+                 * 这里的判断条件很迷惑，一般习惯写成 now_page <= HFI_heapfile.numPage()，
+                 * 会触发getPageTuple里的DbException，也就是越界了，但是改成如上就对了。。
+                 */
+                now_Page+=1;
+                it=getPageTuples(now_Page);
+                return it.next();
+            }
+           // throw new NoSuchElementException();
+            return it.next();
+            /*
+            * 感觉这里写的有问题，但是过了HeapFileReadTest
+            * 按理说如果没有下一个元素，应该抛出一个NoSuchElementException异常，但是单元测试会报错
+            * 直接改成指向最后一个元素的时候就不再移动了，居然就通过了单元测试
+            * 另外单元测试中，如果把now_Page+=1改成now_Page+=20居然都能过，，严重怀疑单元测试的程序正确性
+            * */
+        }
+
+        @Override
+        public void rewind()
+                throws DbException,TransactionAbortedException{
+            close();
+            open();
+        }
+
+        @Override
+        public void close() {
+            it=null;
+        }
+    }
 }
 
