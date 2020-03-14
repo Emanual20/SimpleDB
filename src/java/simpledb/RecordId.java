@@ -67,7 +67,7 @@ public class RecordId implements Serializable {
     @Override
     public int hashCode() {
         // some code goes here
-        String hash = "" + rec_pid.getTableId()+rec_pid.getPageNumber() + rec_tupleno;
+        String hash = "" + rec_pid.getTableId() + rec_pid.getPageNumber() + rec_tupleno;
         return hash.hashCode();
     }
 

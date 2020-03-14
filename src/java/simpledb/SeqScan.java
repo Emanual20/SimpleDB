@@ -1,5 +1,6 @@
 package simpledb;
 
+import javax.xml.crypto.Data;
 import java.util.*;
 
 /**
@@ -11,6 +12,10 @@ public class SeqScan implements OpIterator {
 
     private static final long serialVersionUID = 1L;
 
+    private final TransactionId SeqScan_tid;
+    private int SeqScan_tableid;
+    private String SeqScan_tableAlias;
+    private DbFileIterator it;
     /**
      * Creates a sequential scan over the specified table as a part of the
      * specified transaction.
@@ -29,6 +34,9 @@ public class SeqScan implements OpIterator {
      */
     public SeqScan(TransactionId tid, int tableid, String tableAlias) {
         // some code goes here
+        SeqScan_tid=tid;
+        SeqScan_tableid=tableid;
+        SeqScan_tableAlias=tableAlias;
     }
 
     /**
@@ -37,7 +45,7 @@ public class SeqScan implements OpIterator {
      *       be the actual name of the table in the catalog of the database
      * */
     public String getTableName() {
-        return null;
+        return Database.getCatalog().getTableName(SeqScan_tableid);
     }
 
     /**
@@ -46,7 +54,7 @@ public class SeqScan implements OpIterator {
     public String getAlias()
     {
         // some code goes here
-        return null;
+        return SeqScan_tableAlias;
     }
 
     /**
@@ -63,6 +71,8 @@ public class SeqScan implements OpIterator {
      */
     public void reset(int tableid, String tableAlias) {
         // some code goes here
+        SeqScan_tableid=tableid;
+        SeqScan_tableAlias=tableAlias;
     }
 
     public SeqScan(TransactionId tid, int tableId) {
@@ -71,6 +81,8 @@ public class SeqScan implements OpIterator {
 
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
+        it=Database.getCatalog().getDatabaseFile(SeqScan_tableid).iterator(SeqScan_tid);
+        it.open();
     }
 
     /**
@@ -85,26 +97,33 @@ public class SeqScan implements OpIterator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return Database.getCatalog().getTupleDesc(SeqScan_tableid);
+        //something to be fixed here,but not the bug result.
     }
 
     public boolean hasNext() throws TransactionAbortedException, DbException {
         // some code goes here
-        return false;
+        if(it==null) return false;
+        return it.hasNext();
     }
 
     public Tuple next() throws NoSuchElementException,
             TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        if(it==null) throw new NoSuchElementException("has been null");
+        Tuple temp_tuple=it.next();
+        if(temp_tuple==null) throw new NoSuchElementException("what the hell we fetch!");
+        return temp_tuple;
     }
 
     public void close() {
         // some code goes here
+        it=null;
     }
 
     public void rewind() throws DbException, NoSuchElementException,
             TransactionAbortedException {
         // some code goes here
+        it.rewind();
     }
 }

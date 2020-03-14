@@ -53,6 +53,8 @@ public class HeapFile implements DbFile {
      */
     public int getId() {
         // some code goes here
+        // System.out.println(1);
+        //return hf_file.hashCode();
         return hf_file.getAbsoluteFile().hashCode();
     }
 
@@ -69,6 +71,7 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public Page readPage(PageId pid) {
         // some code goes here
+        // System.out.println(1);
         Page ret_page=null;
         byte[] page_data=new byte[BufferPool.getPageSize()];
 
@@ -95,6 +98,7 @@ public class HeapFile implements DbFile {
      */
     public int numPages() {
         // some code goes here
+        // System.out.println(1);
         return (int)hf_file.length()/BufferPool.getPageSize();
     }
 
@@ -118,11 +122,12 @@ public class HeapFile implements DbFile {
     public DbFileIterator iterator(TransactionId tid) {
         // some code goes here
         /*
-        * 这部分参考了一些网上的资源和思路，确实不太清楚这个TransactionId在这里给出来想干什么，
+        * 不太清楚这个TransactionId在这里给出来想干什么，查阅了一些资源也没看懂
         * 其实最后也并没有用到这个TransactionId??? 不很理解
         * */
         return new HeapFileIterator(this,tid);
     }
+
 
     private static final class HeapFileIterator implements DbFileIterator{
         private final HeapFile HFI_heapfile;
@@ -154,30 +159,28 @@ public class HeapFile implements DbFile {
         @Override
         public boolean hasNext()
                 throws DbException, TransactionAbortedException{
-            if(it==null||!it.hasNext()) return false;
-            return true;
+            if(it==null) return false;
+            if(it.hasNext()) return true;
+            else{//比如一共有7页，now_page=0~5的时候可以继续读下一页
+                if(now_Page<=HFI_heapfile.numPages()-2){
+                    now_Page++;
+                    it=getPageTuples(now_Page);
+                    return it.hasNext();
+                }
+                return false;
+            }
         }
 
         @Override
         public Tuple next()
                 throws DbException,TransactionAbortedException,NoSuchElementException{
-            if(it==null) throw new NoSuchElementException();
-            if(it.hasNext()&&now_Page<(HFI_heapfile.numPages()-1)){
-                /*
-                 * 这里的判断条件很迷惑，一般习惯写成 now_page <= HFI_heapfile.numPage()，
-                 * 会触发getPageTuple里的DbException，也就是越界了，但是改成如上就对了。。
-                 */
-                now_Page+=1;
-                it=getPageTuples(now_Page);
+            if(it==null) throw new NoSuchElementException("null pointer");
+            if(it.hasNext()){
                 return it.next();
             }
-           // throw new NoSuchElementException();
-            return it.next();
+            throw new NoSuchElementException("we don't have a next element");
             /*
-            * 感觉这里写的有问题，但是过了HeapFileReadTest
-            * 按理说如果没有下一个元素，应该抛出一个NoSuchElementException异常，但是单元测试会报错
-            * 直接改成指向最后一个元素的时候就不再移动了，居然就通过了单元测试
-            * 另外单元测试中，如果把now_Page+=1改成now_Page+=20居然都能过，，严重怀疑单元测试的程序正确性
+            * 这里一开始果然写的有问题，逻辑完全错掉了。。
             * */
         }
 
@@ -194,4 +197,3 @@ public class HeapFile implements DbFile {
         }
     }
 }
-

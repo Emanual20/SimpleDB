@@ -36,7 +36,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         // some code goes here
         num_Pages=numPages;
-        page_hashmap=new ConcurrentHashMap<Integer,Page>();
+        page_hashmap=new ConcurrentHashMap<>();
     }
     
     public static int getPageSize() {
@@ -74,8 +74,13 @@ public class BufferPool {
         if(!page_hashmap.containsKey(pid.hashCode())){
             DbFile dbfile= Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page=dbfile.readPage(pid);
-            page_hashmap.put(pid.hashCode(),page);
+            if(page_hashmap.size()<num_Pages) {
+               // System.out.println(page_hashmap.size());
+                page_hashmap.put(pid.hashCode(), page);
+            }
+            else throw new DbException("we haven't enough space for store");
         }
+        //System.out.println(1);
         return page_hashmap.get(pid.hashCode());
     }
 

@@ -19,11 +19,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Catalog {
 
     private List<table> table_list;
+    private List<Integer> tableID_list;
     private class table{
         public DbFile tb_dbfile;
         public String tb_name;
         public String tb_pkeyField;
         public int tb_tableID;
+
+        table(DbFile file, String name, String pkeyField){
+            tb_dbfile=file;
+            tb_name=name;
+            tb_pkeyField=pkeyField;
+            tb_tableID=tb_dbfile.getId();
+        }
     }
 
     /**
@@ -33,6 +41,7 @@ public class Catalog {
     public Catalog() {
         // some code goes here
         table_list=new ArrayList<>();
+        tableID_list=new ArrayList<>();
     }
 
     /**
@@ -46,22 +55,21 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
-        table temp_table=new table();
-        temp_table.tb_dbfile=file;
-        temp_table.tb_name=name;
-        temp_table.tb_pkeyField=pkeyField;
-        temp_table.tb_tableID=file.getId();
+        table temp_table=new table(file,name,pkeyField);
         for(int i=0;i<table_list.size();i++){
             if(name.equals(table_list.get(i).tb_name)){
                 table_list.set(i,temp_table);
+                tableID_list.set(i,temp_table.tb_tableID);
                 return;
             }
             else if(temp_table.tb_tableID==table_list.get(i).tb_tableID){
                 table_list.set(i,temp_table);
+                tableID_list.set(i,temp_table.tb_tableID);
                 return;
             }
         }
         table_list.add(temp_table);
+        tableID_list.add(temp_table.tb_tableID);
     }
 
     public void addTable(DbFile file, String name) {
@@ -88,6 +96,7 @@ public class Catalog {
         for(int i=0;i<table_list.size();i++){
             if(name==null){
                 if(table_list.get(i).tb_name==null) return table_list.get(i).tb_tableID;
+                else throw new NoSuchElementException();
             }
             else if(name.equals(table_list.get(i).tb_name)) return table_list.get(i).tb_tableID;
         }
@@ -105,6 +114,7 @@ public class Catalog {
         for(int i=0;i<table_list.size();i++){
             if(table_list.get(i).tb_tableID==tableid) return table_list.get(i).tb_dbfile.getTupleDesc();
         }
+        //System.out.println(1);
         throw new NoSuchElementException();
     }
 
@@ -119,6 +129,7 @@ public class Catalog {
         for(int i=0;i<table_list.size();i++){
             if(table_list.get(i).tb_tableID==tableid) return table_list.get(i).tb_dbfile;
         }
+        //System.out.println(1);
         throw new NoSuchElementException();
     }
 
@@ -127,12 +138,14 @@ public class Catalog {
         for(int i=0;i<table_list.size();i++){
             if(table_list.get(i).tb_tableID==tableid) return table_list.get(i).tb_pkeyField;
         }
+        //System.out.println(1);
         return null;
     }
 
     public Iterator<Integer> tableIdIterator() {
         // some code goes here
-        return null;
+        // System.out.println(1);
+        return tableID_list.iterator();
     }
 
     public String getTableName(int id) {
@@ -140,6 +153,7 @@ public class Catalog {
         for(int i=0;i<table_list.size();i++){
             if(table_list.get(i).tb_tableID==id) return table_list.get(i).tb_name;
         }
+        //   System.out.println(1);
         return null;
     }
     
@@ -147,6 +161,8 @@ public class Catalog {
     public void clear() {
         // some code goes here
         table_list.clear();
+        tableID_list.clear();
+       // System.out.println(1);
     }
     
     /**

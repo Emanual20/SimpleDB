@@ -31,6 +31,7 @@ public class Tuple implements Serializable {
         tuple_tdesc=td;
         for(int i=0;i<tuple_tdesc.numFields();i++){
             Field field_temp=null;
+            //System.out.println(tuple_tdesc.numFields());
             field_list.add(field_temp);
         }
     }
@@ -97,6 +98,7 @@ public class Tuple implements Serializable {
      */
     public String toString() {
         // some code goes here
+        // System.out.println(1);
         String str_ret="";
         for(int i=0;i<tuple_tdesc.numFields();i++){
             str_ret+=field_list.get(i);
@@ -113,6 +115,7 @@ public class Tuple implements Serializable {
     public Iterator<Field> fields()
     {
         // some code goes here
+        //System.out.println(1);
         return field_list.iterator();
     }
 
@@ -123,5 +126,6 @@ public class Tuple implements Serializable {
     {
         // some code goes here
         tuple_tdesc=td;
+        //System.out.println(1);
     }
 }

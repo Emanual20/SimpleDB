@@ -285,6 +285,7 @@ public class HeapPage implements Page {
         for(int i=0;i<numSlots;i++) {
             if(!isSlotUsed(i)) ret_NumEmptySlots++;
         }
+        //System.out.println(1);
         return ret_NumEmptySlots;
     }
 
@@ -296,6 +297,7 @@ public class HeapPage implements Page {
         int div_res=i/8,div_rem=i%8;
         int temp=header[div_res];
         temp>>=div_rem; temp&=1;
+       // System.out.println(1);
         return temp==1;
     }
 
@@ -319,6 +321,7 @@ public class HeapPage implements Page {
                 Tuple_list.add(tuples[i]);
             }
         }
+        //System.out.println(1);
         return Tuple_list.iterator();
     }
 
