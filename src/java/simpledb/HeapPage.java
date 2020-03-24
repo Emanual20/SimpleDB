@@ -296,7 +296,12 @@ public class HeapPage implements Page {
         // some code goes here
         int div_res=i/8,div_rem=i%8;
         int temp=header[div_res];
-        temp>>=div_rem; temp&=1;
+        //System.out.println(temp);
+        temp>>=div_rem;
+        //System.out.println(temp);
+        //System.out.println(temp&1);
+        //System.out.println(temp%2);
+        temp&=1;
        // System.out.println(1);
         return temp==1;
     }
