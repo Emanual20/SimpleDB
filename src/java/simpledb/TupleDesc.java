@@ -184,6 +184,7 @@ public class TupleDesc implements Serializable {
      */
     public static TupleDesc merge(TupleDesc td1, TupleDesc td2) {
         // some code goes here
+        //System.out.println("has been called");
         Type[] temp_tp=new Type[td1.numFields()+td2.numFields()];
         String[] temp_num=new String[td1.numFields()+td2.numFields()];
         for(int i=0;i<td1.numFields();i++){
