@@ -77,6 +77,10 @@ public class TupleDesc implements Serializable {
         }
     }
 
+    protected void set_typeAr(int index,Type t){
+        // a func needed in StringAggregator.java
+        items.set(index,new TDItem(t,items.get(index).fieldName));
+    }
     /**
      * Constructor. Create a new tuple desc with typeAr.length fields with
      * fields of the specified types, with anonymous (unnamed) fields.

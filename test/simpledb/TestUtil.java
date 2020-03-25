@@ -141,6 +141,19 @@ public class TestUtil {
                     matched = true;
                     break;
                 }
+/*
+                System.out.println(expectedTup);
+                System.out.println(next);
+                System.out.println(expectedTup.getTupleDesc().equals(next.getTupleDesc()));
+                System.out.println(expectedTup.getTupleDesc().numFields());
+                System.out.println(next.getTupleDesc().numFields());
+                for(int i=0;i<expectedTup.getTupleDesc().numFields();i++){
+                    System.out.println(expectedTup.getTupleDesc().getFieldName(i));
+                    System.out.println(next.getTupleDesc().getFieldName(i));
+                    System.out.println(expectedTup.getTupleDesc().getFieldType(i));
+                    System.out.println(next.getTupleDesc().getFieldType(i));
+                }
+*/
             }
 
             if (!matched) {

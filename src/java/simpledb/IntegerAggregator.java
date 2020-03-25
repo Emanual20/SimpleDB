@@ -139,9 +139,10 @@ public class IntegerAggregator implements Aggregator {
             for (ConcurrentHashMap.Entry<Field, items> it : map_gbfield2result.entrySet()) {
                 Tuple t = new Tuple(td_rem);
 
-                if (gbfield == Aggregator.NO_GROUPING) {
+                if (gbfield == Aggregator.NO_GROUPING){
                     t.setField(0, new IntField(it.getValue().val));
-                } else {
+                }
+                else{
                     t.setField(0, it.getKey());
                     t.setField(1, new IntField(it.getValue().val));
                 }

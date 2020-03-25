@@ -1,5 +1,9 @@
 package simpledb;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Knows how to compute some aggregate over a set of StringFields.
  */
@@ -7,6 +11,12 @@ public class StringAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
 
+    private final int gbfield;
+    private final Type gbfieldtype;
+    private final int afield;
+    private final Op what;
+    private ConcurrentHashMap<Field,Integer> map_gbfield2result;
+    private TupleDesc td_rem;
     /**
      * Aggregate constructor
      * @param gbfield the 0-based index of the group-by field in the tuple, or NO_GROUPING if there is no grouping
@@ -18,6 +28,12 @@ public class StringAggregator implements Aggregator {
 
     public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
+        this.gbfield=gbfield;
+        this.gbfieldtype=gbfieldtype;
+        this.afield=afield;
+        map_gbfield2result=new ConcurrentHashMap<>();
+        if(what==Op.COUNT) this.what=what;
+        else throw new IllegalArgumentException("don't support other operator except Op.COUNT");
     }
 
     /**
@@ -26,6 +42,26 @@ public class StringAggregator implements Aggregator {
      */
     public void mergeTupleIntoGroup(Tuple tup) {
         // some code goes here
+        Field hash_gbfield=tup.getField(gbfield);
+        StringField field_to_aggregate=(StringField) tup.getField(afield);
+        String string_to_aggregate=field_to_aggregate.getValue();
+        td_rem=tup.getTupleDesc();
+
+        if(tup.getField(afield).getType()!=Type.STRING_TYPE)
+            throw new UnsupportedOperationException("the type of afield is not STRING_TYPE");
+
+        if(!map_gbfield2result.containsKey(hash_gbfield)){
+            if(what!=Op.COUNT){
+                throw new IllegalArgumentException("don't support other operator except Op.COUNT");
+            }
+            Integer items_to_insert=1;
+            map_gbfield2result.put(hash_gbfield,items_to_insert);
+        }
+        else{
+            Integer item_to_update=map_gbfield2result.get(hash_gbfield);
+            item_to_update+=1;
+            map_gbfield2result.put(hash_gbfield,item_to_update);
+        }
     }
 
     /**
@@ -38,7 +74,61 @@ public class StringAggregator implements Aggregator {
      */
     public OpIterator iterator() {
         // some code goes here
-        throw new UnsupportedOperationException("please implement me for lab2");
+        return new StringAggregateIterator();
     }
 
+    class StringAggregateIterator implements OpIterator{
+        private ArrayList<Tuple> Tuples_rem;
+        private Iterator<Tuple> it;
+        //private TupleDesc td_temp;
+        public StringAggregateIterator() {
+            Tuples_rem = new ArrayList<>();
+            td_rem.set_typeAr(afield,Type.INT_TYPE);
+            //Type[] tp_temp={Type.INT_TYPE.INT_TYPE};
+            //td_temp=new TupleDesc(tp_temp);
+            for (ConcurrentHashMap.Entry<Field, Integer> it : map_gbfield2result.entrySet()) {
+                Tuple t = new Tuple(td_rem);
+                if (gbfield == Aggregator.NO_GROUPING){
+                    t.setField(0, new IntField(it.getValue()));
+                    System.out.println(t.getField(0));
+                }
+                else{
+                    t.setField(0, it.getKey());
+                    t.setField(1, new IntField(it.getValue()));
+                }
+                Tuples_rem.add(t);
+            }
+        }
+
+        @Override
+        public void open() throws DbException, TransactionAbortedException {
+            it=Tuples_rem.iterator();
+        }
+
+        @Override
+        public boolean hasNext() throws DbException,TransactionAbortedException{
+            return it.hasNext();
+        }
+
+        @Override
+        public Tuple next(){
+            return it.next();
+        }
+
+        @Override
+        public void rewind() throws DbException,TransactionAbortedException{
+            this.close();
+            this.open();
+        }
+
+        @Override
+        public TupleDesc getTupleDesc(){
+            return td_rem;
+        }
+
+        @Override
+        public void close(){
+            it=null;
+        }
+    }
 }
