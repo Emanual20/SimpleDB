@@ -1,5 +1,7 @@
 package simpledb;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.lang.management.OperatingSystemMXBean;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -12,12 +14,15 @@ public class IntegerAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
 
+    static private final Field NULL_HASH_KEY=new IntField(2147483647);
+
     private final int gbfield;
-    private final Type gbgieldtype;
+    private final Type gbfieldtype;
     private final int afield;
     private final Op what;
     private TupleDesc td_rem;
     private ConcurrentHashMap<Field,items> map_gbfield2result;
+    private String[] nameAr;
     /**
      * Aggregate constructor
      * 
@@ -36,23 +41,25 @@ public class IntegerAggregator implements Aggregator {
     public IntegerAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
         this.gbfield=gbfield;
-        this.gbgieldtype=gbfieldtype;
+        this.gbfieldtype=gbfieldtype;
         this.afield=afield;
         this.what=what;
         map_gbfield2result=new ConcurrentHashMap<>();
+        nameAr=new String[2];
     }
 
     public class items{
         public int val;
         public int num_average;
+        public int actual_sum;
         public items(int val,int num_average){
-            this.val=val; this.num_average=num_average;
+            this.val=val; this.num_average=num_average; actual_sum=0;
         }
         public items(int val){
-            this.val=val; this.num_average=0;
+            this.val=val; this.num_average=0; actual_sum=0;
         }
         public items(){
-            this.val=0; this.num_average=0;
+            this.val=0; this.num_average=0; actual_sum=0;
         }
     }
     /**
@@ -65,10 +72,16 @@ public class IntegerAggregator implements Aggregator {
     public void mergeTupleIntoGroup(Tuple tup)
             throws UnsupportedOperationException{
         // some code goes here
-        Field hash_gbfield=tup.getField(gbfield);
+        Field hash_gbfield;
+        if(gbfield!=Aggregator.NO_GROUPING) hash_gbfield=tup.getField(gbfield);
+        else hash_gbfield=NULL_HASH_KEY;
+
         IntField field_to_aggregate=(IntField) tup.getField(afield);
         int num_to_aggregate=field_to_aggregate.getValue();
-        td_rem=tup.getTupleDesc();
+
+        if(gbfield==Aggregator.NO_GROUPING) nameAr[0]=null;
+        else nameAr[0]=tup.getTupleDesc().getFieldName(gbfield);
+        nameAr[1]=tup.getTupleDesc().getFieldName(afield);
 
         if(tup.getField(afield).getType()!=Type.INT_TYPE)
             throw new UnsupportedOperationException("the type of afield is not INT_TYPE");
@@ -77,6 +90,7 @@ public class IntegerAggregator implements Aggregator {
             items items_to_insert=new items(num_to_aggregate,0);
             if(what==Op.AVG){
                 items_to_insert.num_average=1;
+                items_to_insert.actual_sum=num_to_aggregate;
             }
             else if(what==Op.COUNT){
                 items_to_insert.val=1;
@@ -86,8 +100,9 @@ public class IntegerAggregator implements Aggregator {
         else{
             items item_to_update=map_gbfield2result.get(hash_gbfield);
             if(what==Op.AVG){
-                item_to_update.val=(item_to_update.val*item_to_update.num_average+num_to_aggregate)/(item_to_update.num_average+1);
+                item_to_update.actual_sum=item_to_update.actual_sum+num_to_aggregate;
                 item_to_update.num_average++;
+                item_to_update.val=item_to_update.actual_sum/item_to_update.num_average;
             }
             else{
                 item_to_update.val=OldValue2NewValue(item_to_update.val,num_to_aggregate,what);
@@ -112,7 +127,8 @@ public class IntegerAggregator implements Aggregator {
                 return OldValue+num_to_aggregate;
             case COUNT:
                 //System.out.println("cnt been called");
-                return OldValue++;
+                //return OldValue++;//我原来这么写的，找了半天也找不出哪儿错了，醉了
+                return OldValue+1;
             default:
                 throw new UnsupportedOperationException("AVG need to operate out the func");
         }
@@ -137,6 +153,17 @@ public class IntegerAggregator implements Aggregator {
         public IntegerAggregateIterator() {
             Tuples_rem = new ArrayList<>();
             for (ConcurrentHashMap.Entry<Field, items> it : map_gbfield2result.entrySet()) {
+                Type[] typeAr;
+                String[] fieldAr;
+                if(gbfield==Aggregator.NO_GROUPING){
+                    typeAr=new Type[]{Type.INT_TYPE};
+                    fieldAr=new String[]{nameAr[1]};
+                }
+                else{
+                    typeAr=new Type[]{gbfieldtype,Type.INT_TYPE};
+                    fieldAr=new String[]{nameAr[0],nameAr[1]};
+                }
+                td_rem=new TupleDesc(typeAr,fieldAr);
                 Tuple t = new Tuple(td_rem);
 
                 if (gbfield == Aggregator.NO_GROUPING){

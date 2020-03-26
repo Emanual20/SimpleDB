@@ -141,7 +141,7 @@ public class TestUtil {
                     matched = true;
                     break;
                 }
-/*
+
                 System.out.println(expectedTup);
                 System.out.println(next);
                 System.out.println(expectedTup.getTupleDesc().equals(next.getTupleDesc()));
@@ -153,10 +153,11 @@ public class TestUtil {
                     System.out.println(expectedTup.getTupleDesc().getFieldType(i));
                     System.out.println(next.getTupleDesc().getFieldType(i));
                 }
-*/
-            }
 
+            }
+           // System.out.println(1111111);
             if (!matched) {
+               // System.out.println(2222222);
                 throw new RuntimeException("expected tuple not found: " + expectedTup);
             }
         }
