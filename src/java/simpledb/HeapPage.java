@@ -248,7 +248,8 @@ public class HeapPage implements Page {
         // not necessary for lab1
         int t_tupno=t.getRecordId().getTupleNumber();
         if(!isSlotUsed(t_tupno)) throw new DbException("the tuple slot is already empty");
-        if(tuples[t_tupno]==null||tuples[t_tupno]!=t) throw new DbException("this tuple is not on this page");
+        if(tuples[t_tupno]==null) throw new DbException("this tuple is not on this page");
+        if(!tuples[t_tupno].equals(t)) throw new DbException("this tuple is not on this page");
         markSlotUsed(t_tupno,false);
         tuples[t_tupno]=null;
     }

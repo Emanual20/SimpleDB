@@ -2,6 +2,7 @@ package simpledb;
 
 import java.io.*;
 
+import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -28,6 +29,7 @@ public class BufferPool {
 
     private final int num_Pages;
     private final ConcurrentHashMap<Integer,Page> page_hashmap;
+    private int test_num;
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -37,6 +39,7 @@ public class BufferPool {
         // some code goes here
         num_Pages=numPages;
         page_hashmap=new ConcurrentHashMap<>();
+        test_num=0;
     }
     
     public static int getPageSize() {
@@ -147,6 +150,12 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        DbFile now_dbfile=Database.getCatalog().getDatabaseFile(tableId);
+        ArrayList<Page> temp_arraylist=now_dbfile.insertTuple(tid,t);
+        for (Page now_page:temp_arraylist) {
+            now_page.markDirty(true,tid);
+            page_hashmap.put(now_page.getId().hashCode(),now_page);
+        }
     }
 
     /**
@@ -166,6 +175,12 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        DbFile now_dbfile=Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
+        ArrayList<Page> temp_arraylist=now_dbfile.deleteTuple(tid,t);
+        for(Page now_page:temp_arraylist){
+            now_page.markDirty(true,tid);
+            page_hashmap.put(now_page.getId().hashCode(),now_page);
+        }
     }
 
     /**

@@ -88,6 +88,15 @@ public class Tuple implements Serializable {
         return field_list.get(i);
     }
 
+    /*i added myself to help BufferPool.java*/
+    public boolean equals(Tuple c_t){
+        boolean flag=true;
+        if(!this.tuple_tdesc.equals(c_t.getTupleDesc())) flag=false;
+        if(!this.tuple_recid.equals(c_t.getRecordId())) flag=false;
+        if(!this.field_list.equals(c_t.field_list)) flag=false;
+        return flag;
+    }
+
     /**
      * Returns the contents of this Tuple as a string. Note that to pass the
      * system tests, the format needs to be as follows:
