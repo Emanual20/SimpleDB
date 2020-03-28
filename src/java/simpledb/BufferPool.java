@@ -3,6 +3,7 @@ package simpledb;
 import java.io.*;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -77,11 +78,10 @@ public class BufferPool {
         if(!page_hashmap.containsKey(pid.hashCode())){
             DbFile dbfile= Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page=dbfile.readPage(pid);
-            if(page_hashmap.size()<num_Pages) {
-               // System.out.println(page_hashmap.size());
-                page_hashmap.put(pid.hashCode(), page);
+            if(page_hashmap.size()>=num_Pages) {
+                evictPage();
             }
-            else throw new DbException("we haven't enough space for store");
+            page_hashmap.put(pid.hashCode(), page);
         }
         //System.out.println(1);
         return page_hashmap.get(pid.hashCode());
@@ -191,7 +191,9 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
-
+        for(Page now_page:page_hashmap.values()){
+            flushPage(now_page.getId());
+        }
     }
 
     /** Remove the specific page id from the buffer pool.
@@ -205,15 +207,22 @@ public class BufferPool {
     public synchronized void discardPage(PageId pid) {
         // some code goes here
         // not necessary for lab1
+        page_hashmap.remove(pid.hashCode());
     }
 
     /**
      * Flushes a certain page to disk
      * @param pid an ID indicating the page to flush
      */
-    private synchronized  void flushPage(PageId pid) throws IOException {
+    private synchronized void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        //System.out.println(test_num++);
+        Page now_page=page_hashmap.get(pid.hashCode());
+        if(now_page.isDirty()!=null){
+            Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(now_page);
+            now_page.markDirty(false,null);
+        }
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -227,9 +236,18 @@ public class BufferPool {
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
-    private synchronized  void evictPage() throws DbException {
+    private synchronized void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+        Integer toevict_page_hashcode= new ArrayList<>(page_hashmap.keySet()).get(0);
+        PageId toevict_pageid=page_hashmap.get(toevict_page_hashcode).getId();
+        try{
+            flushPage(toevict_pageid);
+        }
+        catch(IOException ioe_exception){
+            ioe_exception.printStackTrace();
+        }
+        discardPage(toevict_pageid);
     }
 
 }
