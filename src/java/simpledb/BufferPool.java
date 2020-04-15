@@ -153,6 +153,7 @@ public class BufferPool {
         DbFile now_dbfile=Database.getCatalog().getDatabaseFile(tableId);
         ArrayList<Page> temp_arraylist=now_dbfile.insertTuple(tid,t);
         for (Page now_page:temp_arraylist) {
+            System.out.println(now_page.getId()+"insert1");
             now_page.markDirty(true,tid);
             page_hashmap.put(now_page.getId().hashCode(),now_page);
         }
@@ -178,6 +179,7 @@ public class BufferPool {
         DbFile now_dbfile=Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
         ArrayList<Page> temp_arraylist=now_dbfile.deleteTuple(tid,t);
         for(Page now_page:temp_arraylist){
+            System.out.println(now_page.getId()+"delete1");
             now_page.markDirty(true,tid);
             page_hashmap.put(now_page.getId().hashCode(),now_page);
         }

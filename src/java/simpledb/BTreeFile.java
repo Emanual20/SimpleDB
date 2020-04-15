@@ -179,7 +179,7 @@ public class BTreeFile implements DbFile {
 	 * Recursive function which finds and locks the leaf page in the B+ tree corresponding to
 	 * the left-most page possibly containing the key field f. It locks all internal
 	 * nodes along the path to the leaf node with READ_ONLY permission, and locks the 
-	 * leaf node with permission perm.
+	 * leaf node with permission perm.//TODO:这里对于后续lab可能出现问题
 	 * 
 	 * If f is null, it finds the left-most leaf page -- used for the iterator
 	 * 
@@ -195,7 +195,26 @@ public class BTreeFile implements DbFile {
 			Field f) 
 					throws DbException, TransactionAbortedException {
 		// some code goes here
-        return null;
+		if(pid.pgcateg()==BTreePageId.LEAF){
+			return (BTreeLeafPage) getPage(tid,dirtypages,pid,perm);
+		}
+		else if(pid.pgcateg()==BTreePageId.INTERNAL){
+			BTreeInternalPage now_page=(BTreeInternalPage)getPage(tid,dirtypages,pid,Permissions.READ_ONLY);
+			Iterator<BTreeEntry> it=now_page.iterator();
+			BTreeEntry entry_now=it.next();
+			if(f==null){
+				return findLeafPage(tid,dirtypages,entry_now.getLeftChild(),perm,f);
+			}
+			while(1==1){
+				if(entry_now.getKey().compare(Op.GREATER_THAN_OR_EQ,f)){
+					return findLeafPage(tid,dirtypages,entry_now.getLeftChild(),perm,f);
+				}
+				if(!it.hasNext()) break;
+				else entry_now=it.next();
+			}
+			return findLeafPage(tid,dirtypages,entry_now.getRightChild(),perm,f);
+		}
+		else throw new DbException("this page type doesn't support. in findLeafPage() func");
 	}
 	
 	/**
