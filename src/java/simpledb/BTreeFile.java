@@ -267,7 +267,7 @@ public class BTreeFile implements DbFile {
 				return findLeafPage(tid,dirtypages,entry_now.getRightChild(),perm,f);
 			}
 			while(1==1){
-				if(entry_now.getKey().compare(Op.LESS_THAN,f)){
+				if(entry_now.getKey().compare(Op.LESS_THAN_OR_EQ,f)){
 					return findLeafPage(tid,dirtypages,entry_now.getRightChild(),perm,f);
 				}
 				if(!it.hasNext()) break;
@@ -1430,7 +1430,7 @@ class BTreeFileReverseIterator extends AbstractDbFileIterator {
 		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
 				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
 		BTreePageId root = rootPtr.getRootId();
-		curp = f.ReversefindLeafPage(tid, root, Permissions.READ_ONLY, null);
+		curp = f.ReversefindLeafPage(tid, root, Permissions.READ_ONLY, null);//可能出现问题
 		it = curp.reverseIterator();
 	}
 

@@ -4,7 +4,7 @@ import java.util.*;
 
 /**
  * Add By Sakura
- * BTreeScan is an operator which reads tuples in reverse sorted order
+ * BTreeReverseScan is an operator which reads tuples in reverse sorted order
  * according to a predicate
  */
 public class BTreeReverseScan implements OpIterator {
