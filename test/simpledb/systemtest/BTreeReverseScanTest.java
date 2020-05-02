@@ -58,7 +58,7 @@ public class BTreeReverseScanTest extends SimpleDbTestBase {
             if(t1.get(keyField) < t2.get(keyField)) {
                 cmp = 1;
             }
-            ////价值千金的等号……
+            ////价值千金的等号……=
             else if(t1.get(keyField) >= t2.get(keyField)) {
                 cmp = -1;
             }
