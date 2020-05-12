@@ -31,6 +31,56 @@ public class BufferPool {
     private final int num_Pages;
     private final ConcurrentHashMap<Integer,Page> page_hashmap;
     private int test_num;
+    private LockProcess lockprocess;
+    /*
+    * Added by Sakura
+    * Helper class of describe the type of lock.
+    * when lockType == 1 means the lock is a exclusive lock
+    * when lockType == 2 means the lock is a shared lock
+    * */
+    public class Lock{
+        int lockType;
+        TransactionId tid;
+
+        public Lock(int lockType,TransactionId tid){
+            this.lockType=lockType;
+            this.tid=tid;
+        }
+        public Lock(int lockType){
+            this.lockType=lockType;
+            this.tid=null;
+        }
+    }
+
+    /*
+    * Added by Sakura
+    * Helper class to maintain a set of locks on specific transaction
+    * */
+    public class LockProcess{
+        private ConcurrentHashMap<PageId,List<Lock>> pageid2locklist;
+        public LockProcess(){
+            pageid2locklist=new ConcurrentHashMap<PageId,List<Lock>>();
+        }
+        public synchronized void releasePage(TransactionId tid, PageId pid)
+                throws DbException{
+            List<Lock> locks=pageid2locklist.get(pid);
+            if(locks==null) throw new DbException("the page has no lock");
+            for(int i=locks.size()-1;i>=0;i--){
+                if(locks.get(i).tid==tid) locks.remove(i);
+            }
+            if(locks.size()==0) pageid2locklist.remove(pid);
+            else throw new DbException("something wrong happen in releasePage func()");
+        }
+        public synchronized boolean holdsLock(TransactionId tid,PageId pid){
+            List<Lock> locks=pageid2locklist.get(pid);
+            if(locks==null) return false;
+            for(int i=0;i<locks.size();i++){
+                if(locks.get(i).tid==tid) return true;
+            }
+            return false;
+        }
+    }
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -41,6 +91,7 @@ public class BufferPool {
         num_Pages=numPages;
         page_hashmap=new ConcurrentHashMap<>();
         test_num=0;
+        lockprocess=new LockProcess();
     }
     
     public static int getPageSize() {
@@ -75,6 +126,7 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
+
         if(!page_hashmap.containsKey(pid.hashCode())){
             DbFile dbfile= Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page=dbfile.readPage(pid);
@@ -83,7 +135,6 @@ public class BufferPool {
             }
             page_hashmap.put(pid.hashCode(), page);
         }
-        //System.out.println(1);
         return page_hashmap.get(pid.hashCode());
     }
 
@@ -96,9 +147,11 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      * @param pid the ID of the page to unlock
      */
-    public void releasePage(TransactionId tid, PageId pid) {
+    public void releasePage(TransactionId tid, PageId pid)
+            throws DbException{
         // some code goes here
         // not necessary for lab1|lab2
+        lockprocess.releasePage(tid,pid);
     }
 
     /**
@@ -115,7 +168,7 @@ public class BufferPool {
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return false;
+        return lockprocess.holdsLock(tid,p);
     }
 
     /**
