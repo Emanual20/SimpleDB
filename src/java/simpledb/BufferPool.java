@@ -5,6 +5,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.DoubleBinaryOperator;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -32,52 +33,179 @@ public class BufferPool {
     private final ConcurrentHashMap<Integer,Page> page_hashmap;
     private int test_num;
     private LockProcess lockprocess;
+
     /*
     * Added by Sakura
-    * Helper class of describe the type of lock.
-    * when lockType == 1 means the lock is a exclusive lock
-    * when lockType == 2 means the lock is a shared lock
+    * Helper class of describe the type of lock and the lock's tid.
+    * when lockType == READ_WRITE means the lock is a exclusive lock
+    * when lockType == READ_ONLY means the lock is a shared lock
     * */
     public class Lock{
-        int lockType;
-        TransactionId tid;
+        private Permissions lockType;
+        private TransactionId tid;
 
-        public Lock(int lockType,TransactionId tid){
+        public Lock(Permissions lockType,TransactionId tid){
             this.lockType=lockType;
             this.tid=tid;
         }
-        public Lock(int lockType){
+        public Lock(Permissions lockType){
             this.lockType=lockType;
             this.tid=null;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if(this==obj) return true;
+            if(obj==null||getClass()!=obj.getClass()) return false;
+            Lock obj_lock=(Lock) obj;
+            return tid.equals(obj_lock.tid)&&lockType.equals(obj_lock.lockType);
         }
     }
 
     /*
     * Added by Sakura
-    * Helper class to maintain a set of locks on specific transaction
+    * Helper class to maintain and process series of locks on specific transaction
     * */
     public class LockProcess{
         private ConcurrentHashMap<PageId,List<Lock>> pageid2locklist;
         public LockProcess(){
             pageid2locklist=new ConcurrentHashMap<PageId,List<Lock>>();
         }
+        public void addLock(TransactionId tid,PageId pid,Permissions perm){
+            Lock lock_to_add=new Lock(perm,tid);
+            List<Lock> locklist=pageid2locklist.get(pid);
+            if(locklist==null){//如果这个页面上还没有Lock
+                locklist=new ArrayList<>();
+            }
+            locklist.add(lock_to_add);
+            pageid2locklist.put(pid,locklist);
+        }
+        public synchronized boolean acquiresharelock(TransactionId tid,PageId pid)
+                throws DbException{
+            List<Lock> locklist=pageid2locklist.get(pid);
+            if(locklist!=null&&locklist.size()!=0){
+                if(locklist.size()==1){
+                    Lock only_lock=locklist.iterator().next();
+                    if(only_lock.tid.equals(tid)){
+                        if(only_lock.lockType==Permissions.READ_ONLY) return true;
+                        else addLock(tid,pid,Permissions.READ_ONLY);
+                    }
+                    else{
+                        if(only_lock.lockType==Permissions.READ_ONLY) addLock(tid,pid,Permissions.READ_ONLY);
+                        else {
+                            try {
+                                wait();
+                            }
+                            catch(InterruptedException e){
+                                e.printStackTrace();
+                            }
+                            return false;
+                        }
+                        //throw new DbException("something to be done in acquiresharelock() func");
+                    }
+                }
+                else{
+                    // Opt1.两个锁，都属于tid（一读一写）
+                    // Opt2.两个锁，都属于非tid（一读一写）
+                    // Opt3.多个读锁，有一个读锁为tid的
+                    // Opt4.多个读锁，但没有读锁为tid的
+                    for (Lock it : locklist) {
+                        if (it.lockType == Permissions.READ_WRITE) {
+                            //如果其中有一个写锁，那么根据是否为自己的来判断属于情况1还是2
+                            if(it.tid.equals(tid)) return true;
+                            else {
+                                try {
+                                    wait();
+                                }
+                                catch(InterruptedException e){
+                                    e.printStackTrace();
+                                }
+                                return false;
+                            }
+                        }
+                        else{
+                            if (it.tid.equals(tid)) return true;
+                        }
+                    }
+                    addLock(tid,pid,Permissions.READ_ONLY);
+                    return true;
+                }
+            }
+            addLock(tid,pid,Permissions.READ_ONLY);
+            return true;
+        }
+        public synchronized boolean acquireexclusivelock(TransactionId tid,PageId pid)
+                throws DbException{
+            List<Lock> locklist=pageid2locklist.get(pid);
+            if(locklist!=null&&locklist.size()!=0) {
+                if (locklist.size() == 1) {
+                    Lock only_lock = locklist.iterator().next();
+                    if (only_lock.tid.equals(tid)){
+                        if(only_lock.lockType== Permissions.READ_WRITE) return true;
+                        else {
+                            addLock(tid,pid, Permissions.READ_WRITE);
+                            return true;
+                        }
+                    }
+                    else {
+                        try {
+                            wait();
+                        }
+                        catch(InterruptedException e){
+                            e.printStackTrace();
+                        }
+                        return false;
+                    }
+                    //else throw new DbException("something to do");
+                }
+                else {
+                    if (locklist.size() == 2) {
+                        for (Lock it : locklist) {
+                            if (it.tid.equals(tid) && it.lockType == Permissions.READ_WRITE) {
+                                return true;
+                            }
+                        }
+                    }
+                    try {
+                        wait();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    return false;
+                }
+            }
+            else{
+                addLock(tid,pid, Permissions.READ_WRITE);
+                return true;
+            }
+        }
         public synchronized void releasePage(TransactionId tid, PageId pid)
                 throws DbException{
             List<Lock> locks=pageid2locklist.get(pid);
-            if(locks==null) throw new DbException("the page has no lock");
-            for(int i=locks.size()-1;i>=0;i--){
-                if(locks.get(i).tid==tid) locks.remove(i);
-            }
-            if(locks.size()==0) pageid2locklist.remove(pid);
-            else throw new DbException("something wrong happen in releasePage func()");
+            if(locks==null||locks.size()==0) throw new DbException("the page has no lock");
+            Lock temp_lock=getLock(tid,pid);
+            locks.remove(temp_lock);
+            pageid2locklist.put(pid,locks);
         }
         public synchronized boolean holdsLock(TransactionId tid,PageId pid){
             List<Lock> locks=pageid2locklist.get(pid);
-            if(locks==null) return false;
+            if(locks==null||locks.size()==0) return false;
             for(int i=0;i<locks.size();i++){
-                if(locks.get(i).tid==tid) return true;
+                if(locks.get(i).tid.equals(tid)) return true;
             }
             return false;
+        }
+        public synchronized Lock getLock(TransactionId tid, PageId pid) {
+            List<Lock> list = pageid2locklist.get(pid);
+            if (list == null || list.size() == 0) {
+                return null;
+            }
+            for (Lock ls : list) {
+                if (ls.tid.equals(tid)) {
+                    return ls;
+                }
+            }
+            return null;
         }
     }
 
@@ -124,8 +252,11 @@ public class BufferPool {
      * @param perm the requested permissions on the page
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
-        throws TransactionAbortedException, DbException {
+        throws TransactionAbortedException, DbException{
         // some code goes here
+
+        if(perm==Permissions.READ_WRITE) lockprocess.acquireexclusivelock(tid,pid);
+        else lockprocess.acquiresharelock(tid,pid);
 
         if(!page_hashmap.containsKey(pid.hashCode())){
             DbFile dbfile= Database.getCatalog().getDatabaseFile(pid.getTableId());
@@ -162,6 +293,7 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        transactionComplete(tid,true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
@@ -177,11 +309,13 @@ public class BufferPool {
      *
      * @param tid the ID of the transaction requesting the unlock
      * @param commit a flag indicating whether we should commit or abort
+     * @Todo has not been done
      */
     public void transactionComplete(TransactionId tid, boolean commit)
         throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+
     }
 
     /**

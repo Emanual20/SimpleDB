@@ -114,7 +114,13 @@ public class HeapFile implements DbFile {
         // not necessary for lab1
         ArrayList<Page> ret_arraylist=new ArrayList<>();
         for(int i=0;i<numPages();i++){
-            HeapPage now_Page=(HeapPage)Database.getBufferPool().getPage(tid,new HeapPageId(getId(),i),Permissions.READ_WRITE);
+            HeapPage now_Page=null;
+            try {
+                now_Page=(HeapPage)Database.getBufferPool().getPage(tid,new HeapPageId(getId(),i),Permissions.READ_WRITE);
+            }
+            catch(DbException e){
+                e.printStackTrace();
+            }
             if(now_Page.getNumEmptySlots()==0) continue;
            // System.out.println(now_Page.getNumEmptySlots());
             now_Page.insertTuple(t);
@@ -127,7 +133,13 @@ public class HeapFile implements DbFile {
         BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(hf_file,true));
         bos.write(HeapPage.createEmptyPageData());
         bos.close();
-        HeapPage now_Page = (HeapPage) Database.getBufferPool().getPage(tid, new HeapPageId(getId(),numPages()-1),Permissions.READ_WRITE);
+        HeapPage now_Page = null;
+        try {
+            now_Page=(HeapPage) Database.getBufferPool().getPage(tid, new HeapPageId(getId(), numPages() - 1), Permissions.READ_WRITE);
+        }
+        catch(DbException e){
+            e.printStackTrace();
+        }
         now_Page.insertTuple(t);
         ret_arraylist.add(now_Page);
         return ret_arraylist;
@@ -139,7 +151,13 @@ public class HeapFile implements DbFile {
         // some code goes here
         // not necessary for lab1
         ArrayList<Page> ret_arraylist=new ArrayList<>();
-        HeapPage now_Page=(HeapPage)Database.getBufferPool().getPage(tid,t.getRecordId().getPageId(),Permissions.READ_WRITE);
+        HeapPage now_Page=null;
+        try {
+            now_Page=(HeapPage) Database.getBufferPool().getPage(tid, t.getRecordId().getPageId(), Permissions.READ_WRITE);
+        }
+        catch(DbException e){
+            e.printStackTrace();
+        }
         now_Page.deleteTuple(t);//Exception will be throw out in this func
         ret_arraylist.add(now_Page);
         return ret_arraylist;
@@ -148,10 +166,6 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
         // some code goes here
-        /*
-        * 不太清楚这个TransactionId在这里给出来想干什么，查阅了一些资源也没看懂
-        * 其实最后也并没有用到这个TransactionId??? 不很理解
-        * */
         return new HeapFileIterator(this,tid);
     }
 
@@ -177,7 +191,13 @@ public class HeapFile implements DbFile {
                 throws TransactionAbortedException,DbException{
             if(pageNumber>=0 && pageNumber<HFI_heapfile.numPages()){
                 HeapPageId pid=new HeapPageId(HFI_heapfile.getId(),pageNumber);
-                HeapPage page=(HeapPage) Database.getBufferPool().getPage(HFI_tid,pid,Permissions.READ_ONLY);
+                HeapPage page=null;
+                try {
+                    page = (HeapPage) Database.getBufferPool().getPage(HFI_tid, pid, Permissions.READ_ONLY);
+                }
+                catch (DbException e) {
+                    e.printStackTrace();
+                }
                 return page.iterator();
             }
             throw new DbException("something bad happen");

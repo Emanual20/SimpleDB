@@ -554,7 +554,13 @@ public class BTreeFile implements DbFile {
 			return dirtypages.get(pid);
 		}
 		else {
-			Page p = Database.getBufferPool().getPage(tid, pid, perm);
+			Page p = null;
+			try {
+				p = Database.getBufferPool().getPage(tid, pid, perm);
+			}
+			catch(DbException e){
+				e.printStackTrace();
+			}
 			if(perm == Permissions.READ_WRITE) {
 				dirtypages.put(pid, p);
 			}
@@ -1346,8 +1352,14 @@ class BTreeFileIterator extends AbstractDbFileIterator {
 	 * Open this iterator by getting an iterator on the first leaf page
 	 */
 	public void open() throws DbException, TransactionAbortedException {
-		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
-				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
+		BTreeRootPtrPage rootPtr = null;
+		try {
+			rootPtr=(BTreeRootPtrPage) Database.getBufferPool().getPage(
+					tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
+		}
+		catch(DbException e){
+			e.printStackTrace();
+		}
 		BTreePageId root = rootPtr.getRootId();
 		curp = f.findLeafPage(tid, root, Permissions.READ_ONLY, null);
 		it = curp.iterator();
@@ -1370,8 +1382,14 @@ class BTreeFileIterator extends AbstractDbFileIterator {
 				curp = null;
 			}
 			else {
-				curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
-						nextp, Permissions.READ_ONLY);
+				curp = null;
+				try {
+					curp=(BTreeLeafPage) Database.getBufferPool().getPage(tid,
+							nextp, Permissions.READ_ONLY);
+				}
+				catch(DbException e){
+					e.printStackTrace();
+				}
 				it = curp.iterator();
 				if (!it.hasNext())
 					it = null;
@@ -1427,8 +1445,14 @@ class BTreeFileReverseIterator extends AbstractDbFileIterator {
 	 * Open this iterator by getting an iterator on the first leaf page
 	 */
 	public void open() throws DbException, TransactionAbortedException {
-		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
-				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
+		BTreeRootPtrPage rootPtr = null;
+		try {
+			rootPtr=(BTreeRootPtrPage) Database.getBufferPool().getPage(
+					tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
+		}
+		catch(DbException e){
+			e.printStackTrace();
+		}
 		BTreePageId root = rootPtr.getRootId();
 		curp = f.ReversefindLeafPage(tid, root, Permissions.READ_ONLY, null);//可能出现问题
 		it = curp.reverseIterator();
@@ -1451,8 +1475,14 @@ class BTreeFileReverseIterator extends AbstractDbFileIterator {
 				curp = null;
 			}
 			else {
-				curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
-						nextp, Permissions.READ_ONLY);
+				curp = null;
+				try {
+					curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
+							nextp, Permissions.READ_ONLY);
+				}
+				catch(DbException e){
+					e.printStackTrace();
+				}
 				it = curp.reverseIterator();
 				if (!it.hasNext())
 					it = null;
@@ -1513,8 +1543,14 @@ class BTreeSearchIterator extends AbstractDbFileIterator {
 	 * for the given predicate operation
 	 */
 	public void open() throws DbException, TransactionAbortedException {
-		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
-				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
+		BTreeRootPtrPage rootPtr = null;
+		try {
+			rootPtr=(BTreeRootPtrPage) Database.getBufferPool().getPage(
+					tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
+		}
+		catch(DbException e){
+			e.printStackTrace();
+		}
 		BTreePageId root = rootPtr.getRootId();
 		if(ipred.getOp() == Op.EQUALS || ipred.getOp() == Op.GREATER_THAN 
 				|| ipred.getOp() == Op.GREATER_THAN_OR_EQ) {
@@ -1561,8 +1597,14 @@ class BTreeSearchIterator extends AbstractDbFileIterator {
 				return null;
 			}
 			else {
-				curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
-						nextp, Permissions.READ_ONLY);
+				curp = null;
+				try {
+					curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
+							nextp, Permissions.READ_ONLY);
+				}
+				catch(DbException e){
+					e.printStackTrace();
+				}
 				it = curp.iterator();
 			}
 		}
@@ -1616,9 +1658,14 @@ class BTreeReverseSearchIterator extends AbstractDbFileIterator{
 	 * for the given predicate operation
 	 */
 	public void open() throws DbException, TransactionAbortedException {
-		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
-				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
-
+		BTreeRootPtrPage rootPtr = null;
+		try {
+			rootPtr=(BTreeRootPtrPage) Database.getBufferPool().getPage(
+					tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
+		}
+		catch(DbException e){
+			e.printStackTrace();
+		}
 		BTreePageId root = rootPtr.getRootId();
 		if(ipred.getOp() == Op.EQUALS || ipred.getOp() == Op.LESS_THAN
 				|| ipred.getOp() == Op.LESS_THAN_OR_EQ) {
@@ -1667,8 +1714,14 @@ class BTreeReverseSearchIterator extends AbstractDbFileIterator{
 				return null;
 			}
 			else {
-				curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
-						nextp, Permissions.READ_ONLY);
+				curp = null;
+				try {
+					curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
+							nextp, Permissions.READ_ONLY);
+				}
+				catch(DbException e){
+					e.printStackTrace();
+				}
 				it = curp.reverseIterator();
 			}
 		}
