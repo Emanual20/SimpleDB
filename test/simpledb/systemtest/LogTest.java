@@ -142,21 +142,9 @@ public class LogTest extends SimpleDbTestBase {
         // called Page.setBeforeImage().
         Transaction t1 = new Transaction();
         t1.start();
-        /*
         Page p = Database.getBufferPool().getPage(t1.getId(),
                                                   new HeapPageId(hf1.getId(), 0),
                                                   Permissions.READ_ONLY);
-                                                  */
-        Page p=null;
-        try{
-            p = Database.getBufferPool().getPage(t1.getId(),
-                    new HeapPageId(hf1.getId(), 0),
-                    Permissions.READ_ONLY);
-        }
-        catch(DbException e){
-            e.printStackTrace();
-        }
-
         Page p1 = p.getBeforeImage();
         Boolean same = Arrays.equals(p.getPageData(),
                                      p1.getPageData());
