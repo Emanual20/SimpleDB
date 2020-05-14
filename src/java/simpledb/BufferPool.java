@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * The BufferPool is also responsible for locking;  when a transaction fetches
  * a page, BufferPool checks that the transaction has the appropriate
  * locks to read/write the page.
- * 
+ *
  * @Threadsafe, all fields are final
  */
 public class BufferPool {
@@ -22,15 +22,196 @@ public class BufferPool {
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
-    
+
     /** Default number of pages passed to the constructor. This is used by
-    other classes. BufferPool should use the numPages argument to the
-    constructor instead. */
+     other classes. BufferPool should use the numPages argument to the
+     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
 
     private final int num_Pages;
     private final ConcurrentHashMap<Integer,Page> page_hashmap;
     private int test_num;
+    private LockProcess lockprocess;
+
+    /*
+     * Added by Sakura
+     * Helper class of describe the type of lock and the lock's tid.
+     * when lockType == READ_WRITE means the lock is a exclusive lock
+     * when lockType == READ_ONLY means the lock is a shared lock
+     * */
+    public class Lock{
+        private Permissions lockType;
+        private TransactionId tid;
+
+        public Lock(Permissions lockType,TransactionId tid){
+            this.lockType=lockType;
+            this.tid=tid;
+        }
+        public Lock(Permissions lockType){
+            this.lockType=lockType;
+            this.tid=null;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if(this==obj) return true;
+            if(obj==null||getClass()!=obj.getClass()) return false;
+            Lock obj_lock=(Lock) obj;
+            return tid.equals(obj_lock.tid)&&lockType.equals(obj_lock.lockType);
+        }
+    }
+
+    /*
+     * Added by Sakura
+     * Helper class to maintain and process series of locks on specific transaction
+     * */
+    public class LockProcess{
+        private ConcurrentHashMap<PageId,List<Lock>> pageid2locklist;
+        public LockProcess(){
+            pageid2locklist=new ConcurrentHashMap<PageId,List<Lock>>();
+        }
+        public synchronized void addLock(TransactionId tid,PageId pid,Permissions perm){
+            Lock lock_to_add=new Lock(perm,tid);
+            List<Lock> locklist=pageid2locklist.get(pid);
+            if(locklist==null){//如果这个页面上还没有Lock
+                locklist=new ArrayList<>();
+            }
+            locklist.add(lock_to_add);
+            pageid2locklist.put(pid,locklist);
+        }
+        public synchronized boolean acquiresharelock(TransactionId tid,PageId pid)
+                throws DbException{
+            List<Lock> locklist=pageid2locklist.get(pid);
+            if(locklist!=null&&locklist.size()!=0){
+                if(locklist.size()==1){
+                    Lock only_lock=locklist.iterator().next();
+                    if(only_lock.tid.equals(tid)){
+                        if(only_lock.lockType==Permissions.READ_ONLY) return true;
+                        else addLock(tid,pid,Permissions.READ_ONLY);
+                    }
+                    else{
+                        if(only_lock.lockType==Permissions.READ_ONLY) addLock(tid,pid,Permissions.READ_ONLY);
+                        else {
+                            try {
+                               wait(500);
+                            }
+                            catch(InterruptedException e){
+                              e.printStackTrace();
+                            }
+                            return false;
+                        }
+                        //throw new DbException("something to be done in acquiresharelock() func");
+                    }
+                }
+                else{
+                    // Opt1.两个锁，都属于tid（一读一写）
+                    // Opt2.两个锁，都属于非tid（一读一写）
+                    // Opt3.多个读锁，有一个读锁为tid的
+                    // Opt4.多个读锁，但没有读锁为tid的
+                    for (Lock it : locklist) {
+                        if (it.lockType == Permissions.READ_WRITE) {
+                            //如果其中有一个写锁，那么根据是否为自己的来判断属于情况1还是2
+                            if(it.tid.equals(tid)) return true;
+                            else {
+                                 try {
+                                     wait(500);
+                                 }
+                                 catch(InterruptedException e){
+                                     e.printStackTrace();
+                                 }
+                                return false;
+                            }
+                        }
+                        else{
+                            if (it.tid.equals(tid)) return true;
+                        }
+                    }
+                    addLock(tid,pid,Permissions.READ_ONLY);
+                    return true;
+                }
+            }
+            addLock(tid,pid,Permissions.READ_ONLY);
+            return true;
+        }
+        public synchronized boolean acquireexclusivelock(TransactionId tid,PageId pid)
+                throws DbException{
+            List<Lock> locklist=pageid2locklist.get(pid);
+            if(locklist!=null&&locklist.size()!=0) {
+                if (locklist.size() == 1) {
+                    Lock only_lock = locklist.iterator().next();
+                    if (only_lock.tid.equals(tid)){
+                        if(only_lock.lockType== Permissions.READ_WRITE) return true;
+                        else {
+                            addLock(tid,pid, Permissions.READ_WRITE);
+                            return true;
+                        }
+                    }
+                    else {
+                        try {
+                           wait(500);
+                        }
+                         catch(InterruptedException e){
+                             e.printStackTrace();
+                        }
+                        return false;
+                    }
+                    //else throw new DbException("something to do");
+                }
+                else {
+                    if (locklist.size() == 2) {
+                        for (Lock it : locklist) {
+                            if (it.tid.equals(tid) && it.lockType == Permissions.READ_WRITE) {
+                                return true;
+                            }
+                        }
+                    }
+                    try {
+                        wait(500);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    return false;
+                }
+            }
+            else{
+                addLock(tid,pid, Permissions.READ_WRITE);
+                return true;
+            }
+        }
+        public synchronized boolean releasePage(TransactionId tid, PageId pid)
+        {
+            List<Lock> locks=pageid2locklist.get(pid);
+            if(locks==null||locks.size()==0) {
+                System.out.println("there are no locks");
+                return false;
+            }
+            Lock temp_lock=getLock(tid,pid);
+            locks.remove(temp_lock);
+            pageid2locklist.put(pid,locks);
+            return true;
+        }
+        public synchronized boolean holdsLock(TransactionId tid,PageId pid){
+            List<Lock> locks=pageid2locklist.get(pid);
+            if(locks==null||locks.size()==0) return false;
+            for(int i=0;i<locks.size();i++){
+                if(locks.get(i).tid.equals(tid)) return true;
+            }
+            return false;
+        }
+        public synchronized Lock getLock(TransactionId tid, PageId pid) {
+            List<Lock> list = pageid2locklist.get(pid);
+            if (list == null || list.size() == 0) {
+                return null;
+            }
+            for (Lock ls : list) {
+                if (ls.tid.equals(tid)) {
+                    return ls;
+                }
+            }
+            return null;
+        }
+    }
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -41,20 +222,21 @@ public class BufferPool {
         num_Pages=numPages;
         page_hashmap=new ConcurrentHashMap<>();
         test_num=0;
+        lockprocess=new LockProcess();
     }
-    
+
     public static int getPageSize() {
-      return pageSize;
+        return pageSize;
     }
-    
+
     // THIS FUNCTION SHOULD ONLY BE USED FOR TESTING!!
     public static void setPageSize(int pageSize) {
-    	BufferPool.pageSize = pageSize;
+        BufferPool.pageSize = pageSize;
     }
-    
+
     // THIS FUNCTION SHOULD ONLY BE USED FOR TESTING!!
     public static void resetPageSize() {
-    	BufferPool.pageSize = DEFAULT_PAGE_SIZE;
+        BufferPool.pageSize = DEFAULT_PAGE_SIZE;
     }
 
     /**
@@ -73,8 +255,12 @@ public class BufferPool {
      * @param perm the requested permissions on the page
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
-        throws TransactionAbortedException, DbException {
+            throws TransactionAbortedException, DbException {
         // some code goes here
+
+        if(perm==Permissions.READ_WRITE) lockprocess.acquireexclusivelock(tid,pid);
+        else lockprocess.acquiresharelock(tid,pid);
+
         if(!page_hashmap.containsKey(pid.hashCode())){
             DbFile dbfile= Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page=dbfile.readPage(pid);
@@ -99,6 +285,7 @@ public class BufferPool {
     public void releasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
+        lockprocess.releasePage(tid,pid);
     }
 
     /**
@@ -115,7 +302,7 @@ public class BufferPool {
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return false;
+        return lockprocess.holdsLock(tid,p);
     }
 
     /**
@@ -126,28 +313,53 @@ public class BufferPool {
      * @param commit a flag indicating whether we should commit or abort
      */
     public void transactionComplete(TransactionId tid, boolean commit)
-        throws IOException {
+            throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        if(commit) flushPages(tid);//写到磁盘上
+        else revertchanges(tid);//事务恢复
+
+        for(Integer it:page_hashmap.keySet()){
+            if(holdsLock(tid,page_hashmap.get(it).getId())){
+                releasePage(tid,page_hashmap.get(it).getId());
+            }
+        }
+    }
+
+    /**
+     * Helper class used in transactionComplete function
+     * added by Sakura
+     * Revert changes made in specific transaction
+     * */
+    public synchronized void revertchanges(TransactionId tid){
+        for(Integer it:page_hashmap.keySet()){
+            Page now_page=page_hashmap.get(it);
+            if(now_page.isDirty()==tid){
+                int now_tableid=now_page.getId().getTableId();
+                DbFile f=Database.getCatalog().getDatabaseFile(now_tableid);
+                Page revert_page=f.readPage(now_page.getId());
+                page_hashmap.put(it,revert_page);
+            }
+        }
     }
 
     /**
      * Add a tuple to the specified table on behalf of transaction tid.  Will
-     * acquire a write lock on the page the tuple is added to and any other 
-     * pages that are updated (Lock acquisition is not needed for lab2). 
+     * acquire a write lock on the page the tuple is added to and any other
+     * pages that are updated (Lock acquisition is not needed for lab2).
      * May block if the lock(s) cannot be acquired.
-     * 
+     *
      * Marks any pages that were dirtied by the operation as dirty by calling
-     * their markDirty bit, and adds versions of any pages that have 
-     * been dirtied to the cache (replacing any existing versions of those pages) so 
-     * that future requests see up-to-date pages. 
+     * their markDirty bit, and adds versions of any pages that have
+     * been dirtied to the cache (replacing any existing versions of those pages) so
+     * that future requests see up-to-date pages.
      *
      * @param tid the transaction adding the tuple
      * @param tableId the table to add the tuple to
      * @param t the tuple to add
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
-        throws DbException, IOException, TransactionAbortedException {
+            throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
         DbFile now_dbfile=Database.getCatalog().getDatabaseFile(tableId);
@@ -165,15 +377,15 @@ public class BufferPool {
      * other pages that are updated. May block if the lock(s) cannot be acquired.
      *
      * Marks any pages that were dirtied by the operation as dirty by calling
-     * their markDirty bit, and adds versions of any pages that have 
-     * been dirtied to the cache (replacing any existing versions of those pages) so 
-     * that future requests see up-to-date pages. 
+     * their markDirty bit, and adds versions of any pages that have
+     * been dirtied to the cache (replacing any existing versions of those pages) so
+     * that future requests see up-to-date pages.
      *
      * @param tid the transaction deleting the tuple.
      * @param t the tuple to delete
      */
     public  void deleteTuple(TransactionId tid, Tuple t)
-        throws DbException, IOException, TransactionAbortedException {
+            throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
         DbFile now_dbfile=Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
@@ -199,13 +411,13 @@ public class BufferPool {
     }
 
     /** Remove the specific page id from the buffer pool.
-        Needed by the recovery manager to ensure that the
-        buffer pool doesn't keep a rolled back page in its
-        cache.
-        
-        Also used by B+ tree files to ensure that deleted pages
-        are removed from the cache so they can be reused safely
-    */
+     Needed by the recovery manager to ensure that the
+     buffer pool doesn't keep a rolled back page in its
+     cache.
+
+     Also used by B+ tree files to ensure that deleted pages
+     are removed from the cache so they can be reused safely
+     */
     public synchronized void discardPage(PageId pid) {
         // some code goes here
         // not necessary for lab1
@@ -232,6 +444,12 @@ public class BufferPool {
     public synchronized  void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        for(Integer it:page_hashmap.keySet()){
+            Page now_page=page_hashmap.get(it);
+            if(now_page.isDirty()==tid){
+                flushPage(now_page.getId());
+            }
+        }
     }
 
     /**
@@ -241,6 +459,7 @@ public class BufferPool {
     private synchronized void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+        /*
         Integer toevict_page_hashcode= new ArrayList<>(page_hashmap.keySet()).get(0);
         PageId toevict_pageid=page_hashmap.get(toevict_page_hashcode).getId();
         try{
@@ -250,6 +469,20 @@ public class BufferPool {
             ioe_exception.printStackTrace();
         }
         discardPage(toevict_pageid);
+        */
+        Page to_test_page=null;
+        Integer to_remove_hashcode=null;
+        for(Integer it:page_hashmap.keySet()) {
+            to_test_page = page_hashmap.get(it);
+            if (to_test_page.isDirty() != null) {//HeapPage的isDirty()如果是dirty会返回TransactionId
+                to_test_page=null;
+                continue;
+            }
+            to_remove_hashcode=it;
+            break;
+        }
+        if(to_test_page==null) throw new DbException("there are all dirty page");
+        page_hashmap.remove(to_remove_hashcode);
     }
 
 }
