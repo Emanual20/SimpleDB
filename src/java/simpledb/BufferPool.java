@@ -6,6 +6,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static java.lang.Thread.currentThread;
+import static java.lang.Thread.sleep;
+
 /**
  * BufferPool manages the reading and writing of pages into memory from
  * disk. Access methods call into it to retrieve pages, and it fetches
@@ -91,16 +94,7 @@ public class BufferPool {
                     }
                     else{
                         if(only_lock.lockType==Permissions.READ_ONLY) addLock(tid,pid,Permissions.READ_ONLY);
-                        else {
-                            try {
-                               wait(500);
-                            }
-                            catch(InterruptedException e){
-                              e.printStackTrace();
-                            }
-                            return false;
-                        }
-                        //throw new DbException("something to be done in acquiresharelock() func");
+                        else return false;
                     }
                 }
                 else{
@@ -112,15 +106,7 @@ public class BufferPool {
                         if (it.lockType == Permissions.READ_WRITE) {
                             //如果其中有一个写锁，那么根据是否为自己的来判断属于情况1还是2
                             if(it.tid.equals(tid)) return true;
-                            else {
-                                 try {
-                                     wait(500);
-                                 }
-                                 catch(InterruptedException e){
-                                     e.printStackTrace();
-                                 }
-                                return false;
-                            }
+                            else return false;
                         }
                         else{
                             if (it.tid.equals(tid)) return true;
@@ -146,15 +132,7 @@ public class BufferPool {
                             return true;
                         }
                     }
-                    else {
-                        try {
-                           wait(500);
-                        }
-                         catch(InterruptedException e){
-                             e.printStackTrace();
-                        }
-                        return false;
-                    }
+                    else return false;
                     //else throw new DbException("something to do");
                 }
                 else {
@@ -164,11 +142,6 @@ public class BufferPool {
                                 return true;
                             }
                         }
-                    }
-                    try {
-                        wait(500);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
                     }
                     return false;
                 }
@@ -258,8 +231,27 @@ public class BufferPool {
             throws TransactionAbortedException, DbException {
         // some code goes here
 
-        if(perm==Permissions.READ_WRITE) lockprocess.acquireexclusivelock(tid,pid);
-        else lockprocess.acquiresharelock(tid,pid);
+        boolean is_acquired=false;
+        if(perm==Permissions.READ_WRITE) is_acquired=lockprocess.acquireexclusivelock(tid,pid);
+        else is_acquired=lockprocess.acquiresharelock(tid,pid);
+
+        Long begin=System.currentTimeMillis();
+        System.out.println(System.currentTimeMillis()+"begin"+currentThread().getName());
+        while(!is_acquired) {
+            Long end=System.currentTimeMillis();
+            System.out.println(System.currentTimeMillis()+"test"+currentThread().getName());
+            if(end-begin>5000){
+                throw new TransactionAbortedException();
+            }
+            try {
+                Thread.sleep(500);
+            }
+            catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            if(perm==Permissions.READ_WRITE) is_acquired=lockprocess.acquireexclusivelock(tid,pid);
+            else is_acquired=lockprocess.acquiresharelock(tid,pid);
+        }
 
         if(!page_hashmap.containsKey(pid.hashCode())){
             DbFile dbfile= Database.getCatalog().getDatabaseFile(pid.getTableId());
@@ -296,6 +288,7 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        transactionComplete(tid,true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
