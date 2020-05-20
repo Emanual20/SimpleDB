@@ -5,6 +5,8 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.lang.*;
+import java.util.Random;
 
 import static java.lang.Thread.currentThread;
 import static java.lang.Thread.sleep;
@@ -33,6 +35,7 @@ public class BufferPool {
 
     private final int num_Pages;
     private final ConcurrentHashMap<Integer,Page> page_hashmap;
+    private final ConcurrentHashMap<String,Integer> r_hashmap;
     private int test_num;
     private LockProcess lockprocess;
 
@@ -90,11 +93,11 @@ public class BufferPool {
                     Lock only_lock=locklist.iterator().next();
                     if(only_lock.tid.equals(tid)){
                         if(only_lock.lockType==Permissions.READ_ONLY) return true;
-                        else addLock(tid,pid,Permissions.READ_ONLY);
+                        else {addLock(tid,pid,Permissions.READ_ONLY);return true;}
                     }
                     else{
-                        if(only_lock.lockType==Permissions.READ_ONLY) addLock(tid,pid,Permissions.READ_ONLY);
-                        else return false;
+                        if(only_lock.lockType==Permissions.READ_ONLY) {addLock(tid,pid,Permissions.READ_ONLY); return true;}
+                        else {return false;}
                     }
                 }
                 else{
@@ -102,15 +105,13 @@ public class BufferPool {
                     // Opt2.两个锁，都属于非tid（一读一写）
                     // Opt3.多个读锁，有一个读锁为tid的
                     // Opt4.多个读锁，但没有读锁为tid的
-                    for (Lock it : locklist) {
+                    for (Lock it:locklist) {
                         if (it.lockType == Permissions.READ_WRITE) {
-                            //如果其中有一个写锁，那么根据是否为自己的来判断属于情况1还是2
+                            //如果其中有一个写锁，根据是否为自己的来判断属于情况1还是2
                             if(it.tid.equals(tid)) return true;
-                            else return false;
+                            else {return false;}
                         }
-                        else{
-                            if (it.tid.equals(tid)) return true;
-                        }
+                        else if (it.tid.equals(tid)) return true;
                     }
                     addLock(tid,pid,Permissions.READ_ONLY);
                     return true;
@@ -126,19 +127,19 @@ public class BufferPool {
                 if (locklist.size() == 1) {
                     Lock only_lock = locklist.iterator().next();
                     if (only_lock.tid.equals(tid)){
-                        if(only_lock.lockType== Permissions.READ_WRITE) return true;
+                        if(only_lock.lockType==Permissions.READ_WRITE) return true;
                         else {
                             addLock(tid,pid, Permissions.READ_WRITE);
                             return true;
                         }
                     }
-                    else return false;
+                    else {return false;}
                     //else throw new DbException("something to do");
                 }
                 else {
                     if (locklist.size() == 2) {
-                        for (Lock it : locklist) {
-                            if (it.tid.equals(tid) && it.lockType == Permissions.READ_WRITE) {
+                        for (Lock it:locklist) {
+                            if (it.tid.equals(tid)&&it.lockType==Permissions.READ_WRITE) {
                                 return true;
                             }
                         }
@@ -151,6 +152,11 @@ public class BufferPool {
                 return true;
             }
         }
+        public synchronized boolean acquirelock(TransactionId tid,PageId pid,Permissions perm)
+                throws DbException{
+            if(perm==Permissions.READ_ONLY) return acquiresharelock(tid,pid);
+            return acquireexclusivelock(tid,pid);
+        }
         public synchronized boolean releasePage(TransactionId tid, PageId pid)
         {
             List<Lock> locks=pageid2locklist.get(pid);
@@ -159,30 +165,29 @@ public class BufferPool {
                 return false;
             }
             Lock temp_lock=getLock(tid,pid);
+            if(temp_lock==null) return false;
             locks.remove(temp_lock);
+
+            while(true){
+                temp_lock=getLock(tid,pid);
+                if(temp_lock==null) break;
+                locks.remove(temp_lock);
+            }
+
             pageid2locklist.put(pid,locks);
             return true;
         }
-        public synchronized boolean holdsLock(TransactionId tid,PageId pid){
-            List<Lock> locks=pageid2locklist.get(pid);
-            if(locks==null||locks.size()==0) return false;
-            for(int i=0;i<locks.size();i++){
-                if(locks.get(i).tid.equals(tid)) return true;
-            }
-            return false;
-        }
         public synchronized Lock getLock(TransactionId tid, PageId pid) {
             List<Lock> list = pageid2locklist.get(pid);
-            if (list == null || list.size() == 0) {
+            if (list==null||list.size()==0) {
                 return null;
             }
-            for (Lock ls : list) {
-                if (ls.tid.equals(tid)) {
-                    return ls;
-                }
+            for (Lock lk:list) {
+                if (lk.tid.equals(tid)) return lk;
             }
             return null;
         }
+
     }
 
     /**
@@ -196,6 +201,7 @@ public class BufferPool {
         page_hashmap=new ConcurrentHashMap<>();
         test_num=0;
         lockprocess=new LockProcess();
+        r_hashmap=new ConcurrentHashMap<>();
     }
 
     public static int getPageSize() {
@@ -228,30 +234,72 @@ public class BufferPool {
      * @param perm the requested permissions on the page
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
-            throws TransactionAbortedException, DbException {
+            throws TransactionAbortedException, DbException{
         // some code goes here
 
-        boolean is_acquired=false;
-        if(perm==Permissions.READ_WRITE) is_acquired=lockprocess.acquireexclusivelock(tid,pid);
-        else is_acquired=lockprocess.acquiresharelock(tid,pid);
+        boolean is_acquired=lockprocess.acquirelock(tid,pid,perm);
 
-        Long begin=System.currentTimeMillis();
-        System.out.println(System.currentTimeMillis()+"begin"+currentThread().getName());
+        long begin=System.currentTimeMillis();
+        long timeout = 3000;
+        //System.out.println(System.currentTimeMillis()+"begin"+currentThread().getName());
+
         while(!is_acquired) {
-            Long end=System.currentTimeMillis();
-            System.out.println(System.currentTimeMillis()+"test"+currentThread().getName());
-            if(end-begin>5000){
+            long end=System.currentTimeMillis();
+            //System.out.println(System.currentTimeMillis()+"test"+currentThread().getName());
+            if(end-begin>timeout){
+                System.out.println(end-begin+","+timeout);
+                //System.out.println(111);
                 throw new TransactionAbortedException();
             }
-            try {
-                Thread.sleep(500);
+            try{
+                Thread.sleep(100);
             }
             catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            if(perm==Permissions.READ_WRITE) is_acquired=lockprocess.acquireexclusivelock(tid,pid);
-            else is_acquired=lockprocess.acquiresharelock(tid,pid);
+            is_acquired=lockprocess.acquirelock(tid,pid,perm);
         }
+
+        //System.out.println(System.currentTimeMillis()+"finish"+currentThread().getName());
+/*
+        if(!is_acquired) try{
+            System.out.println(Thread.currentThread().getName()+"sleep");
+            Thread.sleep(200);
+        }
+        catch (InterruptedException e) {
+            e.printStackTrace();
+        }*/
+
+
+        /*
+        String s=Thread.currentThread().getName();
+        r_hashmap.put(s,0);
+        Integer count=0;
+        Integer ROUND=10;
+
+        while(count<ROUND) {
+            if(!is_acquired) {
+                try{
+                    Thread.sleep(200);
+                }catch(InterruptedException e){
+                    e.printStackTrace();
+                }
+            }
+            else break;
+            is_acquired=lockprocess.acquirelock(tid,pid,perm);
+
+            count=r_hashmap.get(Thread.currentThread().getName());
+            count++;
+            System.out.println(count+Thread.currentThread().getName()+"1");
+            r_hashmap.put(Thread.currentThread().getName(),count);
+
+            System.out.println(count+Thread.currentThread().getName()+"2");
+        }
+
+        count=r_hashmap.get(Thread.currentThread().getName());
+        if(count==ROUND) throw new TransactionAbortedException();
+
+         */
 
         if(!page_hashmap.containsKey(pid.hashCode())){
             DbFile dbfile= Database.getCatalog().getDatabaseFile(pid.getTableId());
@@ -261,7 +309,6 @@ public class BufferPool {
             }
             page_hashmap.put(pid.hashCode(), page);
         }
-        //System.out.println(1);
         return page_hashmap.get(pid.hashCode());
     }
 
@@ -295,7 +342,7 @@ public class BufferPool {
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return lockprocess.holdsLock(tid,p);
+        return lockprocess.getLock(tid,p)!=null;
     }
 
     /**
@@ -314,6 +361,7 @@ public class BufferPool {
 
         for(Integer it:page_hashmap.keySet()){
             if(holdsLock(tid,page_hashmap.get(it).getId())){
+               // System.out.println("111"+System.currentTimeMillis());
                 releasePage(tid,page_hashmap.get(it).getId());
             }
         }
@@ -325,6 +373,7 @@ public class BufferPool {
      * Revert changes made in specific transaction
      * */
     public synchronized void revertchanges(TransactionId tid){
+
         for(Integer it:page_hashmap.keySet()){
             Page now_page=page_hashmap.get(it);
             if(now_page.isDirty()==tid){
@@ -332,6 +381,7 @@ public class BufferPool {
                 DbFile f=Database.getCatalog().getDatabaseFile(now_tableid);
                 Page revert_page=f.readPage(now_page.getId());
                 page_hashmap.put(it,revert_page);
+                //page_hashmap.get(it).setBeforeImage();
             }
         }
     }
@@ -477,5 +527,4 @@ public class BufferPool {
         if(to_test_page==null) throw new DbException("there are all dirty page");
         page_hashmap.remove(to_remove_hashcode);
     }
-
 }
