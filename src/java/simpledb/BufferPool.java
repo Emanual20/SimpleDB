@@ -317,32 +317,67 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException{
         // some code goes here
-
         boolean is_acquired=lockprocess.acquirelock(tid,pid,perm);
 
-        //long begin=System.currentTimeMillis();
-        //long timeout = 3000;
-        //System.out.println(System.currentTimeMillis()+"begin"+currentThread().getName());
-
+        /**
+         * log by Sakura
+         * 下面的是通过依赖图判环来检测死锁的部分，默认情况下这段代码应该是非注释状态。
+         * 在使用下面的代码片段的时候，需要把这段代码注释。
+         */
         while(!is_acquired) {
-            long end=System.currentTimeMillis();
-            /*
             try{
                 Thread.sleep(100);
+            }
+            catch(InterruptedException e){
+                e.printStackTrace();
+            }
+            if (lockprocess.isexistCycle(tid)) {
+                throw new TransactionAbortedException();
+            }
+            is_acquired=lockprocess.acquirelock(tid,pid,perm);
+        }
+
+
+        /**
+         * log by Sakura
+         * 下面的是通过超时策略来检测死锁的部分，把上面的找环检测死锁的部分注释，下面的
+         * 取消注释就可以编译成功了。
+         */
+/*
+        Long begin=System.currentTimeMillis();
+        System.out.println(System.currentTimeMillis()+"begin"+currentThread().getName());
+        while(!is_acquired) {
+            Long end=System.currentTimeMillis();
+            System.out.println(System.currentTimeMillis()+"test"+currentThread().getName());
+            if(end-begin>3000){
+                throw new TransactionAbortedException();
+            }
+            try {
+                Thread.sleep(200);
             }
             catch (InterruptedException e) {
                 e.printStackTrace();
             }
-             */
-            //System.out.println(System.currentTimeMillis()+"test"+currentThread().getName());
-            if(lockprocess.isexistCycle(tid)){
-                //System.out.println(end-begin+","+timeout);
-                //System.out.println(111);
-                throw new TransactionAbortedException();
-            }
-
             is_acquired=lockprocess.acquirelock(tid,pid,perm);
         }
+*/
+        /**
+         * log by Sakura
+         * 下面的代码是超时策略，但没有加入检测死锁机制，
+         * 因为AbortEvictionTest生成的数据包含死锁，但不能自动捕获抛出的异常，
+         * 而导致程序会异常终止，故检查AbortEvictionTest应使用这段代码。
+         * */
+/*
+        if(!is_acquired) {
+            try {
+                Thread.sleep(200);
+            }
+            catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            is_acquired=lockprocess.acquirelock(tid,pid,perm);
+        }
+*/
 
         if(!page_hashmap.containsKey(pid.hashCode())){
             DbFile dbfile= Database.getCatalog().getDatabaseFile(pid.getTableId());
